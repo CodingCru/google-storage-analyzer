@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "google-storage-analyzer"
+version = "0.1.0"
+description = "Find what's eating your Google Drive, Gmail, and Photos storage"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "google-auth>=2.0",
+    "google-auth-oauthlib>=1.0",
+    "google-api-python-client>=2.0",
+    "requests>=2.31",
+    "rich>=13.0",
+    "typer>=0.12",
+    "diskcache>=5.6",
+]
+
+[project.scripts]
+gsa = "gsa.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["gsa"]
