@@ -12,8 +12,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/photoslibrary.readonly",
 ]
 
-TOKEN_PATH = Path.home() / ".config" / "gsa" / "token.json"
-CREDS_PATH = Path.home() / ".config" / "gsa" / "credentials.json"
+TOKEN_PATH = Path.home() / ".gsa" / "token.json"
+CREDS_PATH = Path.home() / ".gsa" / "credentials.json"
 
 
 def get_credentials() -> Credentials:

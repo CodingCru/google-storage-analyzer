@@ -13,12 +13,16 @@ def fmt_size(b: int) -> str:
     return f"{b:.1f} TB"
 
 
-def show_quota(about: dict) -> None:
+def show_quota(about: dict, gmail_data: dict | None = None) -> None:
+    # Drive's `about.get` only breaks usage into Drive vs. everything else — Gmail and
+    # Photos share one pool with no separate quota field for either (verified against the
+    # live API response; there is no `usageInGmail` field despite what older notes claimed).
     quota = about.get("storageQuota", {})
     total = int(quota.get("limit", 0))
     used = int(quota.get("usage", 0))
     drive = int(quota.get("usageInDrive", 0))
-    gmail = int(quota.get("usageInDriveTrash", 0))  # repurposed field name from API
+    trash = int(quota.get("usageInDriveTrash", 0))
+    other = used - drive - trash  # Gmail + Photos combined
 
     pct = (used / total * 100) if total else 0
 
@@ -26,6 +30,14 @@ def show_quota(about: dict) -> None:
     console.print(f"  Total:  [bold]{fmt_size(total)}[/bold]")
     console.print(f"  Used:   [bold cyan]{fmt_size(used)}[/bold cyan]  ({pct:.1f}%)")
     console.print(f"  Drive:  {fmt_size(drive)}")
+
+    if gmail_data:
+        gmail_total = gmail_data.get("total", 0)
+        photos_est = other - gmail_total
+        console.print(f"  Gmail:  {fmt_size(gmail_total)}  (from scan)")
+        console.print(f"  Photos: ~{fmt_size(photos_est)}  (estimated: quota − Drive − Gmail)")
+    else:
+        console.print(f"  Other (Gmail + Photos): ~{fmt_size(other)}  (run `gsa scan --gmail` to split these out)")
     console.print()
 
 

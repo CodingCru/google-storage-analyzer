@@ -1,10 +1,28 @@
 import time
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from google.oauth2.credentials import Credentials
 from rich.progress import Progress, SpinnerColumn, TextColumn, TaskProgressColumn
 from rich.console import Console
 
 console = Console()
+
+
+def _get_message(service, mid: str, retries: int = 5):
+    # Exponential backoff on 429 — Gmail allows 250 quota units/sec, each get = 5 units
+    for attempt in range(retries):
+        try:
+            return service.users().messages().get(
+                userId="me", id=mid, format="metadata",
+                metadataHeaders=["From", "Subject"]
+            ).execute()
+        except HttpError as e:
+            if e.resp.status == 429 and attempt < retries - 1:
+                wait = 2 ** attempt
+                console.print(f"[yellow]Rate limited, waiting {wait}s...[/yellow]")
+                time.sleep(wait)
+            else:
+                raise
 
 
 def scan(creds: Credentials, cache) -> dict:
@@ -21,16 +39,13 @@ def scan(creds: Credentials, cache) -> dict:
         SpinnerColumn(),
         TextColumn("[bold green]Scanning Gmail..."),
         TaskProgressColumn(),
-        TextColumn("{task.fields[done]}/{task.fields[total]} messages"),
+        TextColumn("{task.completed}/{task.total} messages"),
         console=console,
     ) as progress:
-        task = progress.add_task("gmail", total=len(message_ids), done=0, total=len(message_ids))
+        task = progress.add_task("gmail", total=len(message_ids))
 
         for i, mid in enumerate(message_ids):
-            msg = service.users().messages().get(
-                userId="me", id=mid, format="metadata",
-                metadataHeaders=["From", "Subject"]
-            ).execute()
+            msg = _get_message(service, mid)
 
             size = msg.get("sizeEstimate", 0)
             headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
@@ -40,7 +55,7 @@ def scan(creds: Credentials, cache) -> dict:
             senders[sender] = senders.get(sender, 0) + size
             largest.append({"id": mid, "sender": sender, "subject": subject, "size": size})
 
-            progress.update(task, advance=1, done=i + 1)
+            progress.update(task, advance=1)
 
             if i % 10 == 9:
                 time.sleep(0.1)

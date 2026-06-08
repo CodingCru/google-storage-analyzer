@@ -41,9 +41,12 @@ def scan(
         console.print("[bold green]Gmail scan complete.[/bold green]")
 
     if photos:
-        from gsa.scanners import photos as photos_scanner
-        photos_scanner.scan(creds, cache, resume=not no_resume)
-        console.print("[bold magenta]Photos scan complete (or paused).[/bold magenta]")
+        console.print(
+            "[yellow]Item-level Photos scanning is unavailable: Google restricts "
+            "mediaItems.list to app-created content for apps without additional access "
+            "verification (403 Forbidden). Photos usage is estimated instead from quota "
+            "math in `gsa report` (Used − Drive − Gmail) — no separate scan needed.[/yellow]"
+        )
 
     console.print("\nRun [bold]gsa report[/bold] to see results.")
 
@@ -58,7 +61,7 @@ def report(
 
     service = build("drive", "v3", credentials=creds)
     about = service.about().get(fields="storageQuota").execute()
-    show_quota(about)
+    show_quota(about, gmail_data=cache.get("gmail"))
 
     show_drive(cache.get("drive"), top=top)
     show_gmail(cache.get("gmail"), top=top)
@@ -70,7 +73,7 @@ def auth():
     """Authenticate with Google (run this first)."""
     get_credentials()
     console.print("[bold green]Authentication successful.[/bold green]")
-    console.print("Token saved to ~/.config/gsa/token.json")
+    console.print("Token saved to ~/.gsa/token.json")
 
 
 @app.command()

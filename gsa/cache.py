@@ -1,7 +1,7 @@
 from pathlib import Path
 import diskcache
 
-CACHE_DIR = Path.home() / ".config" / "gsa" / "cache"
+CACHE_DIR = Path.home() / ".gsa" / "cache"
 
 
 def get_cache() -> diskcache.Cache:

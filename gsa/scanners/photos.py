@@ -8,7 +8,7 @@ from rich.console import Console
 console = Console()
 
 PHOTOS_API = "https://photoslibrary.googleapis.com/v1"
-REQUESTS_PER_SECOND = 5
+REQUESTS_PER_SECOND = 5  # conservative — Photos API has no published quota but throttles aggressively
 BATCH_SIZE = 100
 
 
@@ -92,35 +92,47 @@ def _fetch_sizes(creds: Credentials, items: list[dict], seen: dict[str, int]) ->
         TextColumn("[bold magenta]Fetching photo sizes..."),
         BarColumn(),
         TaskProgressColumn(),
-        TextColumn("{task.fields[done]}/{task.fields[total]}"),
+        TextColumn("{task.completed}/{task.total}"),
         console=console,
     ) as progress:
-        task = progress.add_task("sizes", total=len(items), done=0, total=len(items))
+        task = progress.add_task("sizes", total=len(items))
+        failures = 0
 
         for i, item in enumerate(items):
             meta = item.get("mediaMetadata", {})
             is_video = "video" in meta
 
-            # build a download URL and HEAD it for Content-Length
             base_url = item.get("baseUrl", "")
             if not base_url:
+                # Legitimately sizeless (no content behind it) — safe to record and never retry.
                 seen[item["id"]] = 0
-                progress.update(task, advance=1, done=i + 1)
+                progress.update(task, advance=1)
                 continue
 
+            # =dv → download video original, =d → download photo original
+            # Photos API doesn't return sizes; HEAD on the download URL gives Content-Length
             download_url = base_url + ("=dv" if is_video else "=d")
 
             try:
                 head = session.head(download_url, allow_redirects=True, timeout=10)
+                head.raise_for_status()
                 size = int(head.headers.get("Content-Length", 0))
+                seen[item["id"]] = size
             except Exception:
-                size = 0
+                # Don't record on failure (timeout, 429, expired baseUrl, etc.) — leaving the
+                # item out of `seen` means it gets retried on the next `--resume` run instead
+                # of being silently undercounted as 0 forever.
+                failures += 1
 
-            seen[item["id"]] = size
-            progress.update(task, advance=1, done=i + 1)
+            progress.update(task, advance=1)
 
             if i % REQUESTS_PER_SECOND == REQUESTS_PER_SECOND - 1:
                 time.sleep(1)
+
+        if failures:
+            console.print(
+                f"[yellow]{failures} item(s) failed to size and will be retried on the next run.[/yellow]"
+            )
 
 
 def _auth_session(creds: Credentials) -> requests.Session:

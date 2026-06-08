@@ -53,11 +53,13 @@ def _build_tree(service, files: list) -> dict:
             children.setdefault(parent, []).append(f["id"])
 
     def folder_size(fid: str) -> int:
+        # Recursively sum children; folders themselves have no size field
         f = by_id.get(fid, {})
         if f.get("mimeType") == "application/vnd.google-apps.folder":
             return sum(folder_size(c) for c in children.get(fid, []))
         return int(f.get("size", 0))
 
+    # top_level: files whose parents aren't in our result set (e.g. root-level items)
     top_level = [
         f for f in files
         if not f.get("parents") or all(p not in by_id for p in f.get("parents", []))
@@ -65,6 +67,7 @@ def _build_tree(service, files: list) -> dict:
 
     items = []
     for f in files:
+        # Google Docs/Sheets/Slides have no size — they don't count against quota
         size = int(f.get("size", 0)) if f.get("mimeType") != "application/vnd.google-apps.folder" else folder_size(f["id"])
         items.append({
             "id": f["id"],
